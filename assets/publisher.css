@@ -1,0 +1,79 @@
+.tm-contents,
+[data-block='faq'] details {
+  --tm-disclosure-border: color-mix(in srgb, currentColor 24%, transparent);
+  --tm-disclosure-surface: color-mix(in srgb, currentColor 5%, transparent);
+  border: 1px solid transparent;
+  border-color: var(--tm-disclosure-border, currentColor);
+  border-radius: 0.75rem;
+  background: var(--tm-disclosure-surface, transparent);
+  min-inline-size: 0;
+}
+
+.tm-contents {
+  margin-block: 1.5rem 2rem;
+}
+
+[data-block='faq'] details {
+  margin-block: 0.75rem;
+}
+
+.tm-contents > summary,
+[data-block='faq'] details > summary {
+  min-block-size: 2.75rem;
+  padding: 0.65rem 1rem;
+  box-sizing: border-box;
+  font-weight: 650;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
+.tm-contents > summary:focus-visible,
+.tm-contents a:focus-visible,
+[data-block='faq'] details > summary:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 3px;
+}
+
+.tm-contents > nav > ul {
+  margin: 0;
+  padding: 0.15rem 1rem 0.85rem;
+  padding-inline-start: 2.15rem;
+}
+
+.tm-contents li {
+  margin-block: 0.2rem;
+}
+
+.tm-contents a {
+  display: inline-block;
+  padding-block: 0.15rem;
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
+[data-block='faq'] details > summary > :is(h3, p) {
+  display: inline;
+  margin: 0;
+  font: inherit;
+}
+
+[data-block='faq'] details[open] > :not(summary) {
+  margin: 0;
+  padding: 0 1rem 1rem;
+}
+
+.tm-youtube-embed {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 9;
+  border: 0;
+}
+
+@media (forced-colors: active) {
+  .tm-contents,
+  [data-block='faq'] details {
+    border-color: CanvasText;
+  }
+}

@@ -1,0 +1,34 @@
+name: Publish plugin release
+
+on:
+  push:
+    tags: ['v*.*.*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Validate and package the tagged plugin
+        shell: bash
+        run: |
+          set -euo pipefail
+          PHP_FILE=topicmachine-publisher.php
+          version="$(sed -nE 's/^ \* Version: ([0-9]+\.[0-9]+\.[0-9]+)$/\1/p' "$PHP_FILE")"
+          test -n "$version"
+          test "$GITHUB_REF_NAME" = "v$version"
+          grep -Fxq "const VERSION = '$version';" "$PHP_FILE"
+          php -l "$PHP_FILE"
+          package="$RUNNER_TEMP/topicmachine-publisher"
+          mkdir "$package"
+          cp -R "$PHP_FILE" assets README.md LICENSE.txt "$package/"
+          cd "$RUNNER_TEMP"
+          zip -q -X -r topicmachine-publisher.zip topicmachine-publisher
+          unzip -tq topicmachine-publisher.zip
+      - name: Publish the ZIP on GitHub
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" --verify-tag --generate-notes "$RUNNER_TEMP/topicmachine-publisher.zip"
