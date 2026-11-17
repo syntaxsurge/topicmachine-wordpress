@@ -3,7 +3,7 @@
  * Plugin Name: TopicMachine Publisher
  * Plugin URI: https://topicmachine.com/docs#wordpress
  * Description: Adds accessible article navigation and optional search metadata for TopicMachine articles on WordPress.
- * Version: 1.0.2
+ * Version: 1.0.3
  * Requires at least: 6.4
  * Requires PHP: 8.1
  * Author: SyntaxSurge
@@ -21,7 +21,7 @@ use WP_HTML_Tag_Processor;
 
 defined( 'ABSPATH' ) || exit;
 
-const VERSION = '1.0.2';
+const VERSION = '1.0.3';
 const RELEASE_URL = 'https://github.com/syntaxsurge/topicmachine-wordpress';
 const RELEASE_API = 'https://api.github.com/repos/syntaxsurge/topicmachine-wordpress/releases';
 const RELEASE_ASSET = 'topicmachine-publisher.zip';
@@ -364,6 +364,19 @@ function map_rendered_widgets( string $html, callable $map ): string {
 }
 
 function calculator_display_formula( string $source ): ?string {
+	if ( strlen( $source ) > 65536 ) {
+		return null;
+	}
+
+	$source = trim( $source );
+	if ( ! str_starts_with( $source, '[' ) ) {
+		$decoded = base64_decode( $source, true );
+		if ( false === $decoded ) {
+			return null;
+		}
+		$source = $decoded;
+	}
+
 	$pattern = <<<'REGEX'
 ~\A\[tm-calculator\b.*?\sdata\s*=\s*(?<quote>["'])(?<value>.*)\k<quote>\s*\]\z~is
 REGEX;
