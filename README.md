@@ -31,6 +31,8 @@ Requires WordPress 6.4 or higher and PHP 8.1 or higher.
   Open Graph, and Twitter tags from the article and the current featured image.
   A theme that already owns these tags can use
   `add_filter( 'topicmachine_publisher_fallback_metadata', '__return_false' );`.
+- Published TopicMachine prose wraps naturally while keeping explicit line breaks
+  and the original widget markup.
 - The plugin enqueues a small, scoped stylesheet for Contents, FAQ disclosures,
   and embedded videos. It performs no public network requests on article views.
 - Deactivation and removal leave posts, their media, and their stored metadata

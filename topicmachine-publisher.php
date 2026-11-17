@@ -3,7 +3,7 @@
  * Plugin Name: TopicMachine Publisher
  * Plugin URI: https://topicmachine.com/docs#wordpress
  * Description: Adds accessible article navigation and optional search metadata for TopicMachine articles on WordPress.
- * Version: 1.0.0
+ * Version: 1.0.1
  * Requires at least: 6.4
  * Requires PHP: 8.1
  * Author: SyntaxSurge
@@ -21,7 +21,7 @@ use WP_HTML_Tag_Processor;
 
 defined( 'ABSPATH' ) || exit;
 
-const VERSION = '1.0.0';
+const VERSION = '1.0.1';
 const RELEASE_URL = 'https://github.com/syntaxsurge/topicmachine-wordpress';
 const RELEASE_API = 'https://api.github.com/repos/syntaxsurge/topicmachine-wordpress/releases';
 const RELEASE_ASSET = 'topicmachine-publisher.zip';
@@ -155,11 +155,14 @@ function public_entry_id(): int {
 		: 0;
 }
 
+function is_current_entry_content( int $post_id ): bool {
+	return $post_id && in_the_loop() && is_main_query() && ! doing_filter( 'get_the_excerpt' ) &&
+		$post_id === (int) get_the_ID();
+}
+
 function render_contents( string $content ): string {
 	$post_id = public_entry_id();
-	if ( ! $post_id || ! in_the_loop() || ! is_main_query() || doing_filter( 'get_the_excerpt' ) ||
-		$post_id !== (int) get_the_ID()
-	) {
+	if ( ! is_current_entry_content( $post_id ) ) {
 		return $content;
 	}
 
@@ -197,6 +200,62 @@ function managed_post_id(): int {
 		? $post_id
 		: 0;
 }
+
+/**
+ * Collapse formatting newlines in prose before wpautop can insert hard breaks.
+ * Match literal elements and tags as complete tokens to preserve their bytes.
+ */
+function collapse_paragraph_newlines( string $html ): string {
+	if ( ! str_contains( $html, "\n" ) && ! str_contains( $html, "\r" ) ) {
+		return $html;
+	}
+
+	$tokens = <<<'REGEX'
+~<!--.*?(?:-->|$)
+|<(?<literal>script|style|pre|code|textarea|template|svg)\b(?:"[^"]*"|'[^']*'|[^<>"'])*>.*?(?:</\k<literal>\s*>|$)
+|<(?<closing>/)?(?<tag>[a-z][a-z0-9:-]*)(?=[\s/>])(?:"[^"]*"|'[^']*'|[^<>"'])*>
+|(?<text>[^<]+)~isx
+REGEX;
+	$in_paragraph = false;
+	$widget_tag   = '';
+	$widget_depth = 0;
+
+	return preg_replace_callback( $tokens, static function ( array $token ) use ( &$in_paragraph, &$widget_tag, &$widget_depth ): string {
+		$tag     = strtolower( $token['tag'] ?? '' );
+		$closing = ! empty( $token['closing'] );
+		if ( '' !== $widget_tag ) {
+			if ( $widget_tag === $tag ) {
+				$widget_depth += $closing ? -1 : 1;
+				if ( 0 === $widget_depth ) {
+					$widget_tag = '';
+				}
+			}
+			return $token[0];
+		}
+
+		if ( '' !== $tag && ! $closing && preg_match( '~\sdata-shortcode(?:-source)?(?=[\s=>])~i', $token[0] ) ) {
+			$opener = new WP_HTML_Tag_Processor( $token[0] );
+			$opener->next_tag();
+			if ( null !== $opener->get_attribute( 'data-shortcode' ) || null !== $opener->get_attribute( 'data-shortcode-source' ) ) {
+				$widget_tag   = $tag;
+				$widget_depth = 1;
+				return $token[0];
+			}
+		}
+		if ( 'p' === $tag ) {
+			$in_paragraph = ! $closing;
+		}
+
+		return $in_paragraph && isset( $token['text'] )
+			? preg_replace( '~[ \t\f\r]*[\r\n][ \t\f\r\n]*~', ' ', $token['text'] ) ?? $token['text']
+			: $token[0];
+	}, $html ) ?? $html;
+}
+
+function normalize_published_paragraphs( string $content ): string {
+	return is_current_entry_content( managed_post_id() ) ? collapse_paragraph_newlines( $content ) : $content;
+}
+add_filter( 'the_content', __NAMESPACE__ . '\normalize_published_paragraphs', 8 );
 
 function excerpt( int $post_id ): string {
 	return trim( wp_strip_all_tags( strip_shortcodes( (string) get_post_field( 'post_excerpt', $post_id, 'raw' ) ), true ) );
