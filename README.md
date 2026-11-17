@@ -31,10 +31,14 @@ Requires WordPress 6.4 or higher and PHP 8.1 or higher.
   Open Graph, and Twitter tags from the article and the current featured image.
   A theme that already owns these tags can use
   `add_filter( 'topicmachine_publisher_fallback_metadata', '__return_false' );`.
-- Published TopicMachine prose wraps naturally while keeping explicit line breaks
-  and the original widget markup.
-- The plugin enqueues a small, scoped stylesheet for Contents, FAQ disclosures,
-  and embedded videos. It performs no public network requests on article views.
+- Published TopicMachine prose wraps naturally while keeping explicit line breaks.
+  Generated quiz, calculator, and other supported widget sections keep their
+  markup through WordPress paragraph formatting. Existing widgets use scoped
+  styling, and calculator disclosures use readable input labels.
+- Generic illustration labels are omitted from generated figures and cover
+  captions. Editorial captions, alt text, and stored media metadata remain available.
+- Scoped styles cover article contents, FAQ disclosures, and responsive videos.
+  The plugin performs no public network requests on article views.
 - Deactivation and removal leave posts, their media, and their stored metadata
   in place.
 
