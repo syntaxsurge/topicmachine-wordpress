@@ -31,10 +31,13 @@ Requires WordPress 6.4 or higher and PHP 8.1 or higher.
   Open Graph, and Twitter tags from the article and the current featured image.
   A theme that already owns these tags can use
   `add_filter( 'topicmachine_publisher_fallback_metadata', '__return_false' );`.
-- Published TopicMachine prose wraps naturally while keeping explicit line breaks.
-  Generated quiz, calculator, and other supported widget sections keep their
-  markup through WordPress paragraph formatting. Existing widgets use scoped
-  styling, and calculator disclosures use readable input labels.
+- Published TopicMachine paragraphs, headings, lists, and table cells wrap
+  naturally while keeping explicit line breaks. Quiz, calculator, and other
+  supported widget sections keep their markup through WordPress formatting.
+  Short choices and infographic panels fit their available space. Longer choices
+  use the full width of their group. Calculator disclosures use readable input labels.
+- A local script enables quiz, calculator, and decision controls for published
+  TopicMachine markup whose publishing permissions remove inline assets.
 - Generic illustration labels are omitted from generated figures and cover
   captions. Editorial captions, alt text, and stored media metadata remain available.
 - Scoped styles cover article contents, FAQ disclosures, and responsive videos.

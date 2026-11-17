@@ -1,4 +1,4 @@
-/* TopicMachine article widget styles, scoped to stored pre-v2 widgets. */
+/* Portable styles for saved TopicMachine widgets and their responsive layouts. */
 .tm-widget[data-topicmachine-widget-compat] {
   --_surface: var(--tm-widget-surface, #f8faf9);
   --_panel: var(--tm-widget-panel, #fff);
@@ -375,9 +375,28 @@
   display: none !important;
 }
 @container topicmachine-widget (min-width: 29rem) {
-  .tm-widget[data-topicmachine-widget-compat]
-    :is(.tm-grid, .tm-choices, .tm-panels) {
+  .tm-widget[data-topicmachine-widget-compat] .tm-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .tm-widget:is([data-topicmachine-widget-compat], [data-tm-widget-ui='2'])
+    :is(.tm-choices:not(.tm-choices-stacked), .tm-panels) {
+    display: flex;
+    flex-wrap: wrap;
+  }
+  .tm-widget:is([data-topicmachine-widget-compat], [data-tm-widget-ui='2'])
+    .tm-choices.tm-choices-stacked {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .tm-widget:is([data-topicmachine-widget-compat], [data-tm-widget-ui='2'])
+    .tm-choices:not(.tm-choices-stacked)
+    > .tm-choice {
+    flex: 1 1 calc((100% - var(--_choice-gap, 0.42rem)) / 2);
+    min-inline-size: 0;
+  }
+  .tm-widget:is([data-topicmachine-widget-compat], [data-tm-widget-ui='2'])
+    .tm-panels
+    > .tm-panel {
+    flex: 1 1 calc((100% - var(--_panel-gap, 0.65rem)) / 2);
   }
   .tm-widget[data-topicmachine-widget-compat] .tm-grid > .tm-field:only-child {
     grid-column: 1 / -1;
@@ -391,8 +410,12 @@
   }
 }
 @container topicmachine-widget (min-width: 39rem) {
-  .tm-widget[data-topicmachine-widget-compat] .tm-panels {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+  .tm-widget:is([data-topicmachine-widget-compat], [data-tm-widget-ui='2'])
+    .tm-panels:has(
+      > .tm-panel:nth-child(3n of .tm-panel):nth-last-child(1 of .tm-panel)
+    )
+    > .tm-panel {
+    flex-basis: calc((100% - 2 * var(--_panel-gap, 0.65rem)) / 3);
   }
 }
 .tm-widget[data-topicmachine-widget-compat] {

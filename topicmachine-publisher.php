@@ -3,7 +3,7 @@
  * Plugin Name: TopicMachine Publisher
  * Plugin URI: https://topicmachine.com/docs#wordpress
  * Description: Adds accessible article navigation and optional search metadata for TopicMachine articles on WordPress.
- * Version: 1.0.3
+ * Version: 1.0.4
  * Requires at least: 6.4
  * Requires PHP: 8.1
  * Author: SyntaxSurge
@@ -21,7 +21,7 @@ use WP_HTML_Tag_Processor;
 
 defined( 'ABSPATH' ) || exit;
 
-const VERSION = '1.0.3';
+const VERSION = '1.0.4';
 const RELEASE_URL = 'https://github.com/syntaxsurge/topicmachine-wordpress';
 const RELEASE_API = 'https://api.github.com/repos/syntaxsurge/topicmachine-wordpress/releases';
 const RELEASE_ASSET = 'topicmachine-publisher.zip';
@@ -179,7 +179,7 @@ function render_contents( string $content ): string {
 }
 add_filter( 'the_content', __NAMESPACE__ . '\render_contents', 14 );
 
-function enqueue_styles(): void {
+function enqueue_assets(): void {
 	if ( ! public_entry_id() ) {
 		return;
 	}
@@ -188,9 +188,16 @@ function enqueue_styles(): void {
 	$post_id = managed_post_id();
 	if ( $post_id && str_contains( (string) get_post_field( 'post_content', $post_id, 'raw' ), 'data-shortcode-source=' ) ) {
 		wp_enqueue_style( 'topicmachine-widgets', plugins_url( 'assets/widgets.css', __FILE__ ), array( 'topicmachine-publisher' ), VERSION );
+		wp_enqueue_script(
+			'topicmachine-widgets',
+			plugins_url( 'assets/widgets.js', __FILE__ ),
+			array(),
+			VERSION,
+			array( 'in_footer' => true, 'strategy' => 'defer' )
+		);
 	}
 }
-add_action( 'wp_enqueue_scripts', __NAMESPACE__ . '\enqueue_styles' );
+add_action( 'wp_enqueue_scripts', __NAMESPACE__ . '\enqueue_assets' );
 
 /**
  * Identify the current public post published by TopicMachine.
@@ -220,16 +227,17 @@ REGEX;
  * Collapse formatting newlines in prose before wpautop can insert hard breaks.
  * Match literal elements and tags as complete tokens to preserve their bytes.
  */
-function collapse_paragraph_newlines( string $html ): string {
+function collapse_prose_newlines( string $html ): string {
 	if ( ! str_contains( $html, "\n" ) && ! str_contains( $html, "\r" ) ) {
 		return $html;
 	}
 
-	$in_paragraph = false;
+	$prose_tags = array( 'p', 'li', 'td', 'th', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6' );
+	$prose_blocks = array();
 	$widget_tag   = '';
 	$widget_depth = 0;
 
-	return preg_replace_callback( article_html_tokens(), static function ( array $token ) use ( &$in_paragraph, &$widget_tag, &$widget_depth ): string {
+	return preg_replace_callback( article_html_tokens(), static function ( array $token ) use ( $prose_tags, &$prose_blocks, &$widget_tag, &$widget_depth ): string {
 		$tag     = strtolower( $token['tag'] ?? '' );
 		$closing = ! empty( $token['closing'] );
 		if ( '' !== $widget_tag ) {
@@ -251,11 +259,15 @@ function collapse_paragraph_newlines( string $html ): string {
 				return $token[0];
 			}
 		}
-		if ( 'p' === $tag ) {
-			$in_paragraph = ! $closing;
+		if ( in_array( $tag, $prose_tags, true ) ) {
+			if ( ! $closing ) {
+				$prose_blocks[] = $tag;
+			} elseif ( $tag === end( $prose_blocks ) ) {
+				array_pop( $prose_blocks );
+			}
 		}
 
-		return $in_paragraph && isset( $token['text'] )
+		return $prose_blocks && isset( $token['text'] )
 			? preg_replace( '~[ \t\f\r]*[\r\n][ \t\f\r\n]*~', ' ', $token['text'] ) ?? $token['text']
 			: $token[0];
 	}, $html ) ?? $html;
@@ -363,7 +375,7 @@ function map_rendered_widgets( string $html, callable $map ): string {
 	return $html;
 }
 
-function calculator_display_formula( string $source ): ?string {
+function widget_shortcode_data( string $source, string $kind ): ?array {
 	if ( strlen( $source ) > 65536 ) {
 		return null;
 	}
@@ -377,14 +389,16 @@ function calculator_display_formula( string $source ): ?string {
 		$source = $decoded;
 	}
 
-	$pattern = <<<'REGEX'
-~\A\[tm-calculator\b.*?\sdata\s*=\s*(?<quote>["'])(?<value>.*)\k<quote>\s*\]\z~is
-REGEX;
+	$pattern = '~\A\[tm-' . preg_quote( $kind, '~' ) . '\b.*?\sdata\s*=\s*(?<quote>["\'])(?<value>.*)\k<quote>\s*\]\z~is';
 	if ( ! preg_match( $pattern, $source, $match ) ) {
 		return null;
 	}
+	$data = json_decode( html_entity_decode( $match['value'], ENT_QUOTES | ENT_HTML5, 'UTF-8' ), true, 8 );
+	return is_array( $data ) ? $data : null;
+}
 
-	$data    = json_decode( html_entity_decode( $match['value'], ENT_QUOTES | ENT_HTML5, 'UTF-8' ), true, 8 );
+function calculator_display_formula( string $source ): ?string {
+	$data    = widget_shortcode_data( $source, 'calculator' );
 	$formula = $data['formula'] ?? null;
 	$inputs  = $data['inputs'] ?? null;
 	if ( ! is_string( $formula ) || strlen( $formula ) > 2000 || ! preg_match( '~\A[\w+*/%.()\s-]+\z~D', $formula ) ||
@@ -416,23 +430,62 @@ REGEX;
 }
 
 /**
- * Apply the scoped stylesheet and readable formulas to existing widgets.
+ * Give dense stored choices the same room as newly rendered choices.
  */
-function decorate_rendered_widget( string $html ): string {
+function stack_wide_widget_choices( WP_HTML_Tag_Processor $tag, array $data, string $kind ): void {
+	$items = 'quiz' === $kind ? ( $data['questions'] ?? null ) : ( $data['options'] ?? null );
+	if ( ! is_array( $items ) ) {
+		return;
+	}
+
+	$groups = 'quiz' === $kind
+		? array_map( static fn( $question ) => $question['choices'] ?? null, $items )
+		: array( array_column( $items, 'label' ) );
+	foreach ( $groups as $labels ) {
+		if ( ! $tag->next_tag( array( 'tag_name' => 'DIV', 'class_name' => 'tm-choices' ) ) ) {
+			return;
+		}
+		foreach ( is_array( $labels ) ? $labels : array() as $label ) {
+			if ( is_string( $label ) && preg_match( '~\A.{29}~us', preg_replace( '~\p{M}~u', '', $label ) ?? '' ) ) {
+				$tag->add_class( 'tm-choices-stacked' );
+				break;
+			}
+		}
+	}
+}
+
+/**
+ * Keep saved controls usable when publishing does not store inline assets.
+ */
+function decorate_rendered_widget( string $html, bool $inline_styles ): string {
 	$tag = new WP_HTML_Tag_Processor( $html );
 	$tag->next_tag( 'SECTION' );
 	$revision = $tag->get_attribute( 'data-tm-widget-ui' );
-	if ( null !== $revision && '1' !== $revision ) {
+	if ( null !== $revision && ! in_array( $revision, array( '1', '2', '3' ), true ) ) {
 		return $html;
 	}
+	$legacy   = null === $revision || '1' === $revision;
 	$kind     = $tag->get_attribute( 'data-shortcode' );
 	$source   = $tag->get_attribute( 'data-shortcode-source' );
 	$language = $tag->get_attribute( 'lang' );
-	$tag->add_class( 'tm-widget' );
-	$tag->set_attribute( 'data-topicmachine-widget-compat', 'true' );
+	if ( $legacy || ! $inline_styles ) {
+		$tag->add_class( 'tm-widget' );
+		$tag->set_attribute( 'data-topicmachine-widget-compat', 'true' );
+	}
+
+	if ( 'infographic' !== $kind && str_contains( $html, 'data-role="widget-submit"' ) && ! preg_match( '~<script(?=[\s>])~i', $html ) ) {
+		$tag->set_attribute( 'data-topicmachine-widget-runtime', 'true' );
+	}
+
+	if ( '3' !== $revision && is_string( $source ) && in_array( $kind, array( 'quiz', 'insight', 'poll' ), true ) ) {
+		$data = widget_shortcode_data( $source, 'quiz' === $kind ? 'quiz' : 'poll' );
+		if ( $data ) {
+			stack_wide_widget_choices( $tag, $data, $kind );
+		}
+	}
 	$updated = $tag->get_updated_html();
 
-	if ( 'calculator' !== $kind || str_contains( $updated, 'data-tm-calculation-details=' ) ) {
+	if ( ! $legacy || 'calculator' !== $kind || str_contains( $updated, 'data-tm-calculation-details=' ) ) {
 		return $updated;
 	}
 	$display = is_string( $source ) ? calculator_display_formula( $source ) : null;
@@ -469,9 +522,10 @@ REGEX;
 function isolate_rendered_widgets( string $html, bool $restore = false ): string {
 	static $widgets = array();
 	if ( ! $restore ) {
-		return map_rendered_widgets( $html, static function ( string $widget ) use ( &$widgets ): string {
+		$inline_styles = (bool) preg_match( '~<style(?:\s[^>]*)?>\s*\.tm-widget\s*\{~i', $html );
+		return map_rendered_widgets( $html, static function ( string $widget ) use ( &$widgets, $inline_styles ): string {
 			$key = str_replace( '-', '', wp_generate_uuid4() );
-			$widgets[ $key ] = decorate_rendered_widget( $widget );
+			$widgets[ $key ] = decorate_rendered_widget( $widget, $inline_styles );
 			return '<div data-topicmachine-render-key="' . $key . '"></div>';
 		} );
 	}
@@ -492,13 +546,13 @@ function isolate_rendered_widgets( string $html, bool $restore = false ): string
 	) ?? $html;
 }
 
-function normalize_published_paragraphs( string $content ): string {
+function normalize_published_content( string $content ): string {
 	if ( ! is_current_entry_content( managed_post_id() ) ) {
 		return $content;
 	}
-	return collapse_paragraph_newlines( isolate_rendered_widgets( remove_generic_section_captions( $content ) ) );
+	return collapse_prose_newlines( isolate_rendered_widgets( remove_generic_section_captions( $content ) ) );
 }
-add_filter( 'the_content', __NAMESPACE__ . '\normalize_published_paragraphs', 8 );
+add_filter( 'the_content', __NAMESPACE__ . '\normalize_published_content', 8 );
 
 function restore_rendered_widgets( string $content ): string {
 	return str_contains( $content, 'data-topicmachine-render-key=' )
