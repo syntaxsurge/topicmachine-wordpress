@@ -31,4 +31,19 @@ jobs:
       - name: Publish the ZIP on GitHub
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" --verify-tag --generate-notes "$RUNNER_TEMP/topicmachine-publisher.zip"
+        shell: bash
+        run: |
+          set -euo pipefail
+          package="$RUNNER_TEMP/topicmachine-publisher.zip"
+          if assets=$(gh release view "$GITHUB_REF_NAME" --json assets --jq '.assets[].name' 2>/dev/null); then
+            if grep -Fxq 'topicmachine-publisher.zip' <<< "$assets"; then
+              exit 0
+            fi
+          elif gh release create "$GITHUB_REF_NAME" --verify-tag --generate-notes "$package"; then
+            exit 0
+          fi
+
+          # A manual release may have been completed while this job was running.
+          gh release upload "$GITHUB_REF_NAME" "$package" ||
+            gh release view "$GITHUB_REF_NAME" --json assets --jq '.assets[].name' |
+              grep -Fx 'topicmachine-publisher.zip' >/dev/null
