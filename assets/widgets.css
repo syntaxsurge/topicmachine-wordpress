@@ -437,3 +437,29 @@
   > input {
   align-self: end;
 }
+
+.tm-widget[data-shortcode='quiz'] .tm-choice[data-tm-state='correct'],
+.tm-widget[data-shortcode='quiz'] .tm-choice[data-tm-state='incorrect'] {
+  border-color: var(--_answer-color);
+  background: var(--_panel);
+  background: color-mix(in srgb, var(--_answer-color) 14%, var(--_panel));
+}
+.tm-widget .tm-choice[data-tm-state='correct'] {
+  --_answer-color: var(--_accent);
+}
+.tm-widget .tm-choice[data-tm-state='incorrect'] {
+  --_answer-color: var(--_error);
+}
+.tm-widget[data-shortcode='quiz'] .tm-choice[data-tm-state='incorrect'] input {
+  accent-color: var(--_error);
+}
+.tm-widget.tm-quiz[data-shortcode] .tm-feedback[data-tm-state='incorrect'] {
+  color: var(--_error);
+}
+.tm-widget[data-shortcode='quiz'] .tm-result[data-tm-state='score'] {
+  padding: 0.67rem 0.85rem;
+  border: 1px solid var(--_border);
+  border-radius: 0.45rem;
+  color: var(--_text);
+  background: var(--_panel);
+}

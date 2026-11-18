@@ -3,7 +3,7 @@
  * Plugin Name: TopicMachine Publisher
  * Plugin URI: https://topicmachine.com/docs#wordpress
  * Description: Adds accessible article navigation and optional search metadata for TopicMachine articles on WordPress.
- * Version: 1.0.4
+ * Version: 1.0.5
  * Requires at least: 6.4
  * Requires PHP: 8.1
  * Author: SyntaxSurge
@@ -21,7 +21,7 @@ use WP_HTML_Tag_Processor;
 
 defined( 'ABSPATH' ) || exit;
 
-const VERSION = '1.0.4';
+const VERSION = '1.0.5';
 const RELEASE_URL = 'https://github.com/syntaxsurge/topicmachine-wordpress';
 const RELEASE_API = 'https://api.github.com/repos/syntaxsurge/topicmachine-wordpress/releases';
 const RELEASE_ASSET = 'topicmachine-publisher.zip';
@@ -468,12 +468,23 @@ function decorate_rendered_widget( string $html, bool $inline_styles ): string {
 	$kind     = $tag->get_attribute( 'data-shortcode' );
 	$source   = $tag->get_attribute( 'data-shortcode-source' );
 	$language = $tag->get_attribute( 'lang' );
+	$has_controls = str_contains( $html, 'data-role="widget-submit"' );
+	if ( 'quiz' === $kind && $has_controls && str_contains( $html, 'data-tm-answer=' ) ) {
+		// A saved renderer can bind the same controls before the shared runtime.
+		$html = preg_replace_callback( '~<script\b[^>]*>[\s\S]*?</script\s*>~i', static function ( array $script ): string {
+			return str_contains( $script[0], 'data-tm-ready' ) && str_contains( $script[0], 'quiz-feedback' )
+				? ''
+				: $script[0];
+		}, $html ) ?? $html;
+		// Reprocess after stripping inline assets so byte offsets match.
+		$tag = new WP_HTML_Tag_Processor( $html );
+		$tag->next_tag( 'SECTION' );
+	}
 	if ( $legacy || ! $inline_styles ) {
 		$tag->add_class( 'tm-widget' );
 		$tag->set_attribute( 'data-topicmachine-widget-compat', 'true' );
 	}
-
-	if ( 'infographic' !== $kind && str_contains( $html, 'data-role="widget-submit"' ) && ! preg_match( '~<script(?=[\s>])~i', $html ) ) {
+	if ( 'infographic' !== $kind && $has_controls && ! preg_match( '~<script(?=[\s>])~i', $html ) ) {
 		$tag->set_attribute( 'data-topicmachine-widget-runtime', 'true' );
 	}
 
